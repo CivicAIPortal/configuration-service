@@ -1,0 +1,6 @@
+ai_config_repo: https://github.com/CivicAIPortal/ai-governance.git
+version: main
+
+agent: backend-agent
+
+overrides: []
