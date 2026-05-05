@@ -11,6 +11,7 @@ scrape_configs:
     static_configs:
       - targets:
           - 'configuration-service:8080'
+    scrape_timeout: 5s
 
   - job_name: 'service-health-checks'
     metrics_path: /probe
