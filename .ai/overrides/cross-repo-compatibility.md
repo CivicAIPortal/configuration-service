@@ -25,8 +25,16 @@ When making changes that can affect the shared contract, validate locally:
 1. In discovery-api:
 - `npm run test:mobile`
 
+Preferred one-command helper from discovery-api root:
+
+- `./compat-check.sh` (or `./compat-check.ps1` on PowerShell)
+
 2. In configuration-service:
 - `go test ./...`
+
+Preferred one-command helper from configuration-service root:
+
+- `./compat-check.sh` (or `./compat-check.ps1` on PowerShell)
 
 ## Cross-Repo Change Rule
 
