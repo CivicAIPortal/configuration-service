@@ -1,4 +1,4 @@
-package main
+package metrics
 
 import (
 	"encoding/json"
@@ -19,22 +19,26 @@ var (
 	httpRequestsInFlight prometheus.Gauge
 )
 
-type observabilityHealth struct {
+// Health response structure
+type Health struct {
 	Status    string `json:"status"`
 	Timestamp string `json:"timestamp"`
 }
 
+// statusRecorder wraps http.ResponseWriter to capture status code
 type statusRecorder struct {
 	http.ResponseWriter
 	statusCode int
 }
 
+// WriteHeader captures the status code
 func (recorder *statusRecorder) WriteHeader(code int) {
 	recorder.statusCode = code
 	recorder.ResponseWriter.WriteHeader(code)
 }
 
-func initMetrics() {
+// InitMetrics initializes Prometheus metrics (thread-safe)
+func InitMetrics() {
 	metricsInitOnce.Do(func() {
 		httpRequestsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "configuration_service_http_requests_total",
@@ -56,7 +60,8 @@ func initMetrics() {
 	})
 }
 
-func metricsMiddleware(next http.Handler) http.Handler {
+// Middleware returns a middleware that instruments HTTP requests with metrics
+func Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		recorder := &statusRecorder{ResponseWriter: w, statusCode: http.StatusOK}
@@ -74,21 +79,22 @@ func metricsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// resolveRouteLabel extracts the route template from the mux router
 func resolveRouteLabel(r *http.Request) string {
 	if route := mux.CurrentRoute(r); route != nil {
 		if template, err := route.GetPathTemplate(); err == nil {
 			return template
 		}
 	}
-
 	return "unknown"
 }
 
-func healthGet(w http.ResponseWriter, r *http.Request) {
+// HealthHandler responds to health checks
+func HealthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
-	_ = json.NewEncoder(w).Encode(observabilityHealth{
+	_ = json.NewEncoder(w).Encode(Health{
 		Status:    "OK",
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	})
