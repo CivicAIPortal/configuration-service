@@ -21,4 +21,4 @@ jobs:
     secrets: inherit
     with: 
       buildContext:  "deployment/helm"
-      harbor_config: "deployment/harbor.config"
+      harbor_config: "deployment/helm/harbor.config"
