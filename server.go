@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-    "log"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -10,6 +10,9 @@ import (
 	"github.com/gorilla/mux"
 	"go.uber.org/zap"
 )
+
+var loadConfigFn = getConfig
+var getConfigMapFn = k8sGetConfigmap
 
 func RequestLogger(targetMux http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -20,29 +23,33 @@ func RequestLogger(targetMux http.Handler) http.Handler {
 		Logger.Infow("",
 			zap.String("method", string(r.Method)),
 			zap.String("uri", string(r.RequestURI)),
-			zap.Duration("duration", time.Since(start) * 1000),
+			zap.Duration("duration", time.Since(start)*1000),
 		)
 	})
 }
 
 func startServer(port *int) {
+	router := buildRouter()
+
+	portString := ":" + strconv.Itoa(*port)
+	log.Fatal(http.ListenAndServe(portString, RequestLogger(router)))
+}
+
+func buildRouter() *mux.Router {
 	router := mux.NewRouter().StrictSlash(true)
-	
 	router.HandleFunc("/configuration", rolesGet).Methods("GET")
 	router.HandleFunc("/isAlive", isAliveGet).Methods("GET")
-	
-	portString := ":" + strconv.Itoa(*port)
-    log.Fatal(http.ListenAndServe(portString, RequestLogger(router)))
+	return router
 }
 
 func rolesGet(w http.ResponseWriter, r *http.Request) {
 	// Get config
-	config, _ := getConfig()
+	config, _ := loadConfigFn()
 
 	w.Header().Set("Content-Type", "application/json")
 
 	// Get configmap's data
-	data, err := k8sGetConfigmap(config.configmapName, config.configmapNamespace)
+	data, err := getConfigMapFn(config.configmapName, config.configmapNamespace)
 	if err != nil {
 		Logger.Error(err)
 		w.WriteHeader(500)

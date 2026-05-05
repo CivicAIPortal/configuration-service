@@ -3,4 +3,5 @@ version: main
 
 agent: backend-agent
 
-overrides: []
+overrides:
+  - .ai/overrides/cross-repo-compatibility.md

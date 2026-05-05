@@ -29,4 +29,20 @@ Rest API:
 
 ```
 
+# Mobile compatibility tests
+
+The repository includes mobile simulation contract tests in `mobile_contract_test.go`.
+
+These tests model multiple Android/iOS app cohorts (including old versions) and validate that:
+
+- `/configuration` remains backward-compatible for mobile startup usage.
+- `/isAlive` remains stable.
+- handler behavior on upstream config map failure remains predictable (`500`).
+
+Run:
+
+```bash
+go test ./...
+```
+
 
