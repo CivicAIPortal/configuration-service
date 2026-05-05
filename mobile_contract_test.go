@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -137,5 +138,53 @@ func TestIsAliveContract_Returns200(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d", http.StatusOK, w.Code)
+	}
+}
+
+func TestHealthContract_Returns200AndJsonBody(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	w := httptest.NewRecorder()
+
+	buildRouter().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, w.Code)
+	}
+
+	if got := w.Header().Get("Content-Type"); !strings.Contains(got, "application/json") {
+		t.Fatalf("expected Content-Type application/json, got %q", got)
+	}
+
+	var payload map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("expected valid JSON payload, got error: %v", err)
+	}
+
+	if payload["status"] != "OK" {
+		t.Fatalf("expected status OK, got %q", payload["status"])
+	}
+
+	if payload["timestamp"] == "" {
+		t.Fatal("expected timestamp to be present")
+	}
+}
+
+func TestMetricsEndpoint_ReturnsPrometheusText(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	w := httptest.NewRecorder()
+
+	buildRouter().ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, w.Code)
+	}
+
+	if got := w.Header().Get("Content-Type"); !strings.Contains(got, "text/plain") {
+		t.Fatalf("expected prometheus text response content-type, got %q", got)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "configuration_service_http_requests_total") {
+		t.Fatalf("expected custom metric in body, got %q", body)
 	}
 }

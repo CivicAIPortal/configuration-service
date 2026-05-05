@@ -45,4 +45,25 @@ Run:
 go test ./...
 ```
 
+# Observability
+
+The service now exposes standard health and Prometheus metrics endpoints:
+
+- `GET /health` returns JSON health status with UTC timestamp.
+- `GET /isAlive` remains available for backward compatibility.
+- `GET /metrics` exposes Prometheus metrics.
+
+Custom Prometheus metrics:
+
+- `configuration_service_http_requests_total{method,route,status}`
+- `configuration_service_http_request_duration_seconds{method,route,status}`
+- `configuration_service_http_in_flight_requests`
+
+Repository observability assets:
+
+- Prometheus scrape config: `prometheus.yml`
+- Prometheus alerts: `alerts/configuration-service-alerts.yml`
+- Grafana datasource provisioning: `grafana/provisioning/datasources/prometheus.yml`
+- Grafana dashboard provisioning: `grafana/provisioning/dashboards/`
+
 

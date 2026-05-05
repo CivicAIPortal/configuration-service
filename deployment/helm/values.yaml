@@ -15,7 +15,10 @@ image:
   # -- Image pull secret when internal image is used
   pullSecrets: key
 
-podAnnotations: {}
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/path: "/metrics"
+  prometheus.io/port: "8080"
 
 serviceAccountName: configuration-service
 

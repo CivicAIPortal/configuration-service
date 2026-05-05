@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
 )
 
@@ -23,7 +24,7 @@ func RequestLogger(targetMux http.Handler) http.Handler {
 		Logger.Infow("",
 			zap.String("method", string(r.Method)),
 			zap.String("uri", string(r.RequestURI)),
-			zap.Duration("duration", time.Since(start)*1000),
+			zap.Duration("duration", time.Since(start)),
 		)
 	})
 }
@@ -32,12 +33,18 @@ func startServer(port *int) {
 	router := buildRouter()
 
 	portString := ":" + strconv.Itoa(*port)
-	log.Fatal(http.ListenAndServe(portString, RequestLogger(router)))
+	log.Fatal(http.ListenAndServe(portString, router))
 }
 
 func buildRouter() *mux.Router {
+	initMetrics()
+
 	router := mux.NewRouter().StrictSlash(true)
+	router.Use(metricsMiddleware)
+	router.Use(RequestLogger)
 	router.HandleFunc("/configuration", rolesGet).Methods("GET")
+	router.HandleFunc("/health", healthGet).Methods("GET")
+	router.Handle("/metrics", promhttp.Handler()).Methods("GET")
 	router.HandleFunc("/isAlive", isAliveGet).Methods("GET")
 	return router
 }
