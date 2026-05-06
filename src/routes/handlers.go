@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/eclipse-xfsc/configuration-service/src/kubernetes"
 	"github.com/eclipse-xfsc/configuration-service/src/metrics"
 	"github.com/eclipse-xfsc/configuration-service/src/telemetry"
 	"github.com/gorilla/mux"

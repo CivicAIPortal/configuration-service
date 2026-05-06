@@ -83,7 +83,7 @@
       },
       "targets": [
         {
-          "expr": "probe_success{job='service-health-checks', target='http://configuration-service:8080/health'}",
+          "expr": "max(up{namespace='configuration-service', app='configuration-service'})",
           "refId": "A"
         }
       ],
