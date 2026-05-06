@@ -31,15 +31,25 @@ Rest API:
 
 # Mobile compatibility tests
 
-The repository includes mobile simulation contract tests in `mobile_contract_test.go`.
+Mobile compatibility contract checks are maintained in the discovery-api mobile simulator test suite:
+
+- `../discovery-api/tests/mobile-simulator/journey.contract.test.js` (local contracts)
+- `../discovery-api/tests/mobile-simulator/journey.live.test.js` (live service checks)
 
 These tests model multiple Android/iOS app cohorts (including old versions) and validate that:
 
 - `/configuration` remains backward-compatible for mobile startup usage.
 - `/isAlive` remains stable.
-- handler behavior on upstream config map failure remains predictable (`500`).
+- discovery mobile-facing resource response contracts remain stable.
 
 Run:
+
+```bash
+cd ../discovery-api
+npm run test:mobile
+```
+
+For this repository's own tests, run:
 
 ```bash
 go test ./...
