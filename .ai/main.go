@@ -367,6 +367,11 @@ func ResolveGovernanceRepo(repoRoot string, config Config) (string, error) {
 		if err := runGit(repoRoot, cacheDir, "fetch", "--tags", "--prune", sourceRef); err != nil {
 			return "", err
 		}
+		// Advance the local branch to match origin after a fetch — checkout alone
+		// does not move a branch that is already checked out.
+		if err := runGit(repoRoot, cacheDir, "reset", "--hard", "FETCH_HEAD"); err != nil {
+			return "", err
+		}
 	} else if errors.Is(err, os.ErrNotExist) {
 		if err := os.MkdirAll(filepath.Dir(cacheDir), 0o755); err != nil {
 			return "", fmt.Errorf("create cache dir: %w", err)

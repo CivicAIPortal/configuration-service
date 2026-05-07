@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -59,4 +60,76 @@ func TestResolveOverrideFilesRejectsMissingFiles(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected missing override to fail validation")
 	}
+}
+
+
+func makeGitRepo(t *testing.T, dir string) {
+t.Helper()
+for _, c := range [][]string{
+{"git", "init", "-b", "main"},
+{"git", "config", "user.email", "test@test.com"},
+{"git", "config", "user.name", "Test"},
+} {
+cmd := exec.Command(c[0], c[1:]...)
+cmd.Dir = dir
+if out, err := cmd.CombinedOutput(); err != nil {
+t.Fatalf("setup %v: %v\n%s", c, err, out)
+}
+}
+}
+
+func addCommit(t *testing.T, dir, filename, content string) string {
+t.Helper()
+if err := os.WriteFile(filepath.Join(dir, filename), []byte(content), 0o644); err != nil {
+t.Fatalf("write file: %v", err)
+}
+for _, c := range [][]string{
+{"git", "add", filename},
+{"git", "commit", "-m", "add " + filename},
+} {
+cmd := exec.Command(c[0], c[1:]...)
+cmd.Dir = dir
+if out, err := cmd.CombinedOutput(); err != nil {
+t.Fatalf("%v: %v\n%s", c, err, out)
+}
+}
+cmd := exec.Command("git", "rev-parse", "HEAD")
+cmd.Dir = dir
+out, _ := cmd.CombinedOutput()
+return strings.TrimSpace(string(out))
+}
+
+func TestResolveGovernanceRepoAdvancesCacheAfterNewCommit(t *testing.T) {
+originDir := t.TempDir()
+makeGitRepo(t, originDir)
+if err := os.MkdirAll(filepath.Join(originDir, "agents"), 0o755); err != nil {
+t.Fatalf("mkdir agents: %v", err)
+}
+addCommit(t, originDir, filepath.Join("agents", "backend.yaml"), "name: backend-agent\nincludes: []\n")
+
+repoRoot := t.TempDir()
+cacheRoot := t.TempDir()
+t.Setenv("HOME", cacheRoot)
+t.Setenv("LOCALAPPDATA", cacheRoot)
+config := Config{AIConfigRepo: originDir, Version: "main", Agent: "backend-agent"}
+
+dir1, err := ResolveGovernanceRepo(repoRoot, config)
+if err != nil {
+t.Fatalf("first resolve: %v", err)
+}
+rev1, _ := gitRevision(dir1)
+
+rev2 := addCommit(t, originDir, "extra.md", "new content\n")
+if rev1 == rev2 {
+t.Fatal("test setup: rev1 and rev2 should differ")
+}
+
+dir2, err := ResolveGovernanceRepo(repoRoot, config)
+if err != nil {
+t.Fatalf("second resolve: %v", err)
+}
+got, _ := gitRevision(dir2)
+if got != rev2 {
+t.Fatalf("cache not advanced: want %s, got %s", rev2, got)
+}
 }
