@@ -7,7 +7,7 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o configuration-service .
+RUN GOWORK=off CGO_ENABLED=0 GOOS=linux go build -o configuration-service .
 
 FROM alpine:3.15
 
