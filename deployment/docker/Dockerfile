@@ -4,7 +4,7 @@ WORKDIR /app
 
 ADD . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build
+RUN GOWORK=off CGO_ENABLED=0 GOOS=linux go build
 
 FROM alpine:3.15 as runner
 
