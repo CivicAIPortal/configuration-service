@@ -74,6 +74,10 @@ jobs:
             exit 1
           fi
 
+          echo "Harbor user requested: $HARBOR_USER"
+          echo "Available Harbor credential keys:"
+          printf '%s' "$DECODED_JSON" | jq -r 'keys[]'
+
           HARBOR_PASSWORD=$(printf '%s' "$DECODED_JSON" | jq -r --arg user "$HARBOR_USER" '.[$user]')
 
           if [ -z "$HARBOR_PASSWORD" ]; then
@@ -173,6 +177,10 @@ jobs:
             echo "Failed to decode HARBOR_CREDENTIALS as base64 JSON."
             exit 1
           fi
+
+          echo "Harbor user requested: $HARBOR_USER"
+          echo "Available Harbor credential keys:"
+          printf '%s' "$DECODED_JSON" | jq -r 'keys[]'
 
           HARBOR_PASSWORD=$(printf '%s' "$DECODED_JSON" | jq -r --arg user "$HARBOR_USER" '.[$user]')
 
