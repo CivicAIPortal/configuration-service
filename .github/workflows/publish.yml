@@ -63,24 +63,24 @@ jobs:
             exit 1
           fi
 
-          DECODED_CREDS=$(printf '%s' "$HARBOR_CREDENTIALS" | base64 --decode 2>/dev/null || true)
-          if [ -z "$DECODED_CREDS" ]; then
-            DECODED_CREDS="$HARBOR_CREDENTIALS"
+          if [ -z "$HARBOR_CREDENTIALS" ]; then
+            echo "Missing required secret: HARBOR_CREDENTIALS"
+            exit 1
           fi
 
-          HARBOR_PASSWORD=$(printf '%s\n' "$DECODED_CREDS" | awk -F: -v user="$HARBOR_USER" '$1 == user {sub($1":", ""); print; exit}')
-          if [ -z "$HARBOR_PASSWORD" ]; then
-            SINGLE_USER=$(printf '%s' "$DECODED_CREDS" | cut -d: -f1)
-            if [ "$SINGLE_USER" = "$HARBOR_USER" ] && printf '%s' "$DECODED_CREDS" | grep -q ':'; then
-              HARBOR_PASSWORD="${DECODED_CREDS#*:}"
-            fi
+          DECODED_JSON=$(printf '%s' "$HARBOR_CREDENTIALS" | base64 --decode 2>/dev/null || true)
+          if [ -z "$DECODED_JSON" ]; then
+            echo "Failed to decode HARBOR_CREDENTIALS as base64 JSON."
+            exit 1
           fi
 
-          if [ -z "$HARBOR_PASSWORD" ]; then
-            HARBOR_PASSWORD="$HARBOR_CREDENTIALS"
-          fi
+          HARBOR_PASSWORD=$(printf '%s' "$DECODED_JSON" | jq -r --arg user "$HARBOR_USER" '.[$user]')
 
           if [ -z "$HARBOR_PASSWORD" ]; then
+            echo "Could not resolve Harbor password for configured USER."
+            exit 1
+          fi
+          if [ "$HARBOR_PASSWORD" = "null" ]; then
             echo "Could not resolve Harbor password for configured USER."
             exit 1
           fi
@@ -163,24 +163,24 @@ jobs:
             exit 1
           fi
 
-          DECODED_CREDS=$(printf '%s' "$HARBOR_CREDENTIALS" | base64 --decode 2>/dev/null || true)
-          if [ -z "$DECODED_CREDS" ]; then
-            DECODED_CREDS="$HARBOR_CREDENTIALS"
+          if [ -z "$HARBOR_CREDENTIALS" ]; then
+            echo "Missing required secret: HARBOR_CREDENTIALS"
+            exit 1
           fi
 
-          HARBOR_PASSWORD=$(printf '%s\n' "$DECODED_CREDS" | awk -F: -v user="$HARBOR_USER" '$1 == user {sub($1":", ""); print; exit}')
-          if [ -z "$HARBOR_PASSWORD" ]; then
-            SINGLE_USER=$(printf '%s' "$DECODED_CREDS" | cut -d: -f1)
-            if [ "$SINGLE_USER" = "$HARBOR_USER" ] && printf '%s' "$DECODED_CREDS" | grep -q ':'; then
-              HARBOR_PASSWORD="${DECODED_CREDS#*:}"
-            fi
+          DECODED_JSON=$(printf '%s' "$HARBOR_CREDENTIALS" | base64 --decode 2>/dev/null || true)
+          if [ -z "$DECODED_JSON" ]; then
+            echo "Failed to decode HARBOR_CREDENTIALS as base64 JSON."
+            exit 1
           fi
 
-          if [ -z "$HARBOR_PASSWORD" ]; then
-            HARBOR_PASSWORD="$HARBOR_CREDENTIALS"
-          fi
+          HARBOR_PASSWORD=$(printf '%s' "$DECODED_JSON" | jq -r --arg user "$HARBOR_USER" '.[$user]')
 
           if [ -z "$HARBOR_PASSWORD" ]; then
+            echo "Could not resolve Harbor password for configured USER."
+            exit 1
+          fi
+          if [ "$HARBOR_PASSWORD" = "null" ]; then
             echo "Could not resolve Harbor password for configured USER."
             exit 1
           fi
