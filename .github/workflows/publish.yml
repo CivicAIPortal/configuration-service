@@ -7,100 +7,19 @@ on:
 
 permissions:
   contents: read
-  actions: read
+  actions: write
 
 jobs:
   dockerbuild:
-    runs-on: ubuntu-latest
-    outputs:
-      image_tag: ${{ steps.set-tag.outputs.image_tag }}
-      repo_name: ${{ steps.set-repo-name.outputs.repo_name }}
-    env:
-      CI_DEFAULT_BRANCH: main
-      CI_COMMIT_REF_NAME: ${{ github.ref_name }}
-      CI_COMMIT_TAG: ${{ github.event.release.tag_name || '' }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Set IMAGE_TAG
-        id: set-tag
-        run: |
-          if [ -z "${IMAGE_TAG}" ]; then
-            if [ "$CI_COMMIT_REF_NAME" == "$CI_DEFAULT_BRANCH" ]; then
-              IMAGE_TAG="latest"
-            elif [ -n "$CI_COMMIT_TAG" ]; then
-              NOSLASH=$(echo "$CI_COMMIT_TAG" | tr -s / - )
-              IMAGE_TAG="${NOSLASH//[^a-zA-Z0-9\-\.]/}"
-            else
-              NOSLASH=$(echo "$CI_COMMIT_REF_NAME" | tr -s / - )
-              IMAGE_TAG="branch-${NOSLASH//[^a-zA-Z0-9\-]/}"
-            fi
-          fi
-          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
-
-      - name: Set Repo Name
-        id: set-repo-name
-        run: |
-          IMAGE_REPO=$(basename "${GITHUB_REPOSITORY}")
-          echo "repo_name=$IMAGE_REPO" >> "$GITHUB_OUTPUT"
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Find and build Docker images (multi-arch)
-        env:
-          HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
-          HARBOR_CREDENTIALS: ${{ secrets.HARBOR_CREDENTIALS }}
-        run: |
-          git clone https://x-access-token:${{ secrets.DEV_OPS_PAT }}@github.com/CivicAIPortal/dev-ops.git devops
-          chmod +x ./devops/scripts/harborconfig.sh
-          . ./devops/scripts/harborconfig.sh deployment/docker/harbor.config
-
-          echo "$HARBOR_PASSWORD" | docker login $HARBOR_HOST --username "$HARBOR_USERNAME" --password-stdin
-
-          IMAGE_TAG="${{ steps.set-tag.outputs.image_tag }}"
-          PLATFORMS="linux/amd64,linux/arm64"
-          REPO_NAME="${{ steps.set-repo-name.outputs.repo_name }}"
-          FINAL_NAME="$REPO_NAME"
-          IMAGE="$HARBOR_HOST/$HARBOR_PROJECT/$FINAL_NAME:$IMAGE_TAG"
-
-          docker buildx build \
-            --platform "$PLATFORMS" \
-            --file deployment/docker/Dockerfile \
-            --push \
-            --tag "$IMAGE" \
-            .
+    uses: CivicAIPortal/dev-ops/.github/workflows/docker.yml@main
+    secrets: inherit
+    with:
+      dockerfile: "deployment/docker/Dockerfile"
+      harbor_config: "deployment/docker/harbor.config"
 
   helm-setup:
-    runs-on: ubuntu-latest
-    outputs:
-      image_tag: ${{ steps.set-tag.outputs.image_tag }}
-    env:
-      CI_DEFAULT_BRANCH: main
-      CI_COMMIT_REF_NAME: ${{ github.ref_name }}
-      CI_COMMIT_TAG: ${{ github.event.release.tag_name || '' }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set IMAGE_TAG
-        id: set-tag
-        run: |
-          if [ -z "${IMAGE_TAG}" ]; then
-            if [ "$CI_COMMIT_REF_NAME" == "$CI_DEFAULT_BRANCH" ]; then
-              IMAGE_TAG="latest"
-            elif [ -n "$CI_COMMIT_TAG" ]; then
-              NOSLASH=$(echo "$CI_COMMIT_TAG" | tr -s / - )
-              IMAGE_TAG="${NOSLASH//[^a-zA-Z0-9\-\.]/}"
-            else
-              NOSLASH=$(echo "$CI_COMMIT_REF_NAME" | tr -s / - )
-              IMAGE_TAG="branch-${NOSLASH//[^a-zA-Z0-9\-]/}"
-            fi
-          fi
-          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+    uses: CivicAIPortal/dev-ops/.github/workflows/build-context.yml@main
+    secrets: inherit
 
   helm:
     needs: helm-setup
