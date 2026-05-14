@@ -7,18 +7,198 @@ on:
 
 permissions:
   contents: read
-  actions: read
-  
+  actions: write
+
 jobs:
   dockerbuild:
-    uses: CivicAIPortal/dev-ops/.github/workflows/docker.yml@main
-    secrets: inherit
-    with: 
-      dockerfile: "deployment/docker/Dockerfile"
-      harbor_config: "deployment/harbor.config"
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.set-tag.outputs.image_tag }}
+      repo_name: ${{ steps.set-repo-name.outputs.repo_name }}
+    env:
+      CI_DEFAULT_BRANCH: main
+      CI_COMMIT_REF_NAME: ${{ github.ref_name }}
+      CI_COMMIT_TAG: ${{ github.event.release.tag_name || '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set IMAGE_TAG
+        id: set-tag
+        run: |
+          if [ -z "${IMAGE_TAG}" ]; then
+            if [ "$CI_COMMIT_REF_NAME" == "$CI_DEFAULT_BRANCH" ]; then
+              IMAGE_TAG="latest"
+            elif [ -n "$CI_COMMIT_TAG" ]; then
+              NOSLASH=$(echo "$CI_COMMIT_TAG" | tr -s / - )
+              IMAGE_TAG="${NOSLASH//[^a-zA-Z0-9\-\.]/}"
+            else
+              NOSLASH=$(echo "$CI_COMMIT_REF_NAME" | tr -s / - )
+              IMAGE_TAG="branch-${NOSLASH//[^a-zA-Z0-9\-]/}"
+            fi
+          fi
+          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Set Repo Name
+        id: set-repo-name
+        run: |
+          IMAGE_REPO=$(basename "${GITHUB_REPOSITORY}")
+          echo "repo_name=$IMAGE_REPO" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Find and build Docker images (multi-arch)
+        env:
+          HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
+          HARBOR_CREDENTIALS: ${{ secrets.HARBOR_CREDENTIALS }}
+        run: |
+          HARBOR_PROJECT=$(sed -n 's/^PROJECT=//p' deployment/docker/harbor.config | tr -d '\r')
+          HARBOR_USER=$(sed -n 's/^USER=//p' deployment/docker/harbor.config | tr -d '\r')
+
+          if [ -z "$HARBOR_PROJECT" ] || [ -z "$HARBOR_USER" ]; then
+            echo "Invalid deployment/docker/harbor.config; expected PROJECT and USER."
+            exit 1
+          fi
+
+          if [ -z "$HARBOR_CREDENTIALS" ]; then
+            echo "Missing required secret: HARBOR_CREDENTIALS"
+            exit 1
+          fi
+
+          DECODED_JSON=$(printf '%s' "$HARBOR_CREDENTIALS" | base64 --decode 2>/dev/null || true)
+          if [ -z "$DECODED_JSON" ]; then
+            echo "Failed to decode HARBOR_CREDENTIALS as base64 JSON."
+            exit 1
+          fi
+
+          HARBOR_PASSWORD=$(printf '%s' "$DECODED_JSON" | jq -r --arg user "$HARBOR_USER" '.[$user]')
+
+          if [ -z "$HARBOR_PASSWORD" ]; then
+            echo "Could not resolve Harbor password for configured USER."
+            exit 1
+          fi
+          if [ "$HARBOR_PASSWORD" = "null" ]; then
+            echo "Could not resolve Harbor password for configured USER."
+            exit 1
+          fi
+
+          echo "$HARBOR_PASSWORD" | docker login "$HARBOR_HOST" --username "$HARBOR_USER" --password-stdin
+
+          IMAGE_TAG="${{ steps.set-tag.outputs.image_tag }}"
+          PLATFORMS="linux/amd64,linux/arm64"
+          REPO_NAME="${{ steps.set-repo-name.outputs.repo_name }}"
+          IMAGE="$HARBOR_HOST/$HARBOR_PROJECT/$REPO_NAME:$IMAGE_TAG"
+
+          docker buildx build \
+            --platform "$PLATFORMS" \
+            --file deployment/docker/Dockerfile \
+            --push \
+            --tag "$IMAGE" \
+            .
+
+  helm-setup:
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.set-tag.outputs.image_tag }}
+    env:
+      CI_DEFAULT_BRANCH: main
+      CI_COMMIT_REF_NAME: ${{ github.ref_name }}
+      CI_COMMIT_TAG: ${{ github.event.release.tag_name || '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set IMAGE_TAG
+        id: set-tag
+        run: |
+          if [ -z "${IMAGE_TAG}" ]; then
+            if [ "$CI_COMMIT_REF_NAME" == "$CI_DEFAULT_BRANCH" ]; then
+              IMAGE_TAG="latest"
+            elif [ -n "$CI_COMMIT_TAG" ]; then
+              NOSLASH=$(echo "$CI_COMMIT_TAG" | tr -s / - )
+              IMAGE_TAG="${NOSLASH//[^a-zA-Z0-9\-\.]/}"
+            else
+              NOSLASH=$(echo "$CI_COMMIT_REF_NAME" | tr -s / - )
+              IMAGE_TAG="branch-${NOSLASH//[^a-zA-Z0-9\-]/}"
+            fi
+          fi
+          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+
   helm:
-    uses: CivicAIPortal/dev-ops/.github/workflows/helm.yml@main
-    secrets: inherit
-    with: 
-      buildContext:  "deployment/helm"
-      harbor_config: "deployment/helm/harbor.config"
+    needs: helm-setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.work
+
+      - name: Generate Helm Flyway migrations from db/migrations
+        run: go run ./tools/sync_helm_migrations.go .
+
+      - name: Use IMAGE_TAG
+        run: |
+          echo "The image tag is: ${{ needs.helm-setup.outputs.image_tag }}"
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.13.0
+
+      - name: Find and Push Helm Charts
+        env:
+          HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
+          HARBOR_CREDENTIALS: ${{ secrets.HARBOR_CREDENTIALS }}
+        run: |
+          HARBOR_PROJECT=$(sed -n 's/^PROJECT=//p' deployment/helm/harbor.config | tr -d '\r')
+          HARBOR_USER=$(sed -n 's/^USER=//p' deployment/helm/harbor.config | tr -d '\r')
+
+          if [ -z "$HARBOR_PROJECT" ] || [ -z "$HARBOR_USER" ]; then
+            echo "Invalid deployment/helm/harbor.config; expected PROJECT and USER."
+            exit 1
+          fi
+
+          if [ -z "$HARBOR_CREDENTIALS" ]; then
+            echo "Missing required secret: HARBOR_CREDENTIALS"
+            exit 1
+          fi
+
+          DECODED_JSON=$(printf '%s' "$HARBOR_CREDENTIALS" | base64 --decode 2>/dev/null || true)
+          if [ -z "$DECODED_JSON" ]; then
+            echo "Failed to decode HARBOR_CREDENTIALS as base64 JSON."
+            exit 1
+          fi
+
+          HARBOR_PASSWORD=$(printf '%s' "$DECODED_JSON" | jq -r --arg user "$HARBOR_USER" '.[$user]')
+
+          if [ -z "$HARBOR_PASSWORD" ]; then
+            echo "Could not resolve Harbor password for configured USER."
+            exit 1
+          fi
+          if [ "$HARBOR_PASSWORD" = "null" ]; then
+            echo "Could not resolve Harbor password for configured USER."
+            exit 1
+          fi
+
+          helm registry login "$HARBOR_HOST" \
+            --username "$HARBOR_USER" \
+            --password "$HARBOR_PASSWORD"
+
+          CHART_DIR="deployment/helm"
+          cd "$CHART_DIR"
+          echo "Build Dependencies"
+          IMAGE_TAG="${{ needs.helm-setup.outputs.image_tag }}"
+          sed -i.bak -E "s/^(version: .+)-tag$/\1-${IMAGE_TAG}/" Chart.yaml
+          helm dependency build
+          echo "Build Chart"
+          helm package .
+
+          CHART_NAME=$(grep '^name:' Chart.yaml | awk '{print $2}')
+          PACKAGE_FILE="${CHART_NAME}-*.tgz"
+          echo "Push Chart"
+          helm push $PACKAGE_FILE oci://$HARBOR_HOST/$HARBOR_PROJECT
