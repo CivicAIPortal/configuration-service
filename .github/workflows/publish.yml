@@ -55,7 +55,7 @@ jobs:
           HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
           HARBOR_CREDENTIALS: ${{ secrets.HARBOR_CREDENTIALS }}
         run: |
-          git clone https://x-access-token:${{ github.token }}@github.com/CivicAIPortal/dev-ops.git devops
+          git clone https://x-access-token:${{ secrets.DEV_OPS_PAT }}@github.com/CivicAIPortal/dev-ops.git devops
           chmod +x ./devops/scripts/harborconfig.sh
           . ./devops/scripts/harborconfig.sh deployment/docker/harbor.config
 
@@ -130,7 +130,7 @@ jobs:
           HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
           HARBOR_CREDENTIALS: ${{ secrets.HARBOR_CREDENTIALS }}
         run: |
-          git clone https://x-access-token:${{ github.token }}@github.com/CivicAIPortal/dev-ops.git devops
+          git clone https://x-access-token:${{ secrets.DEV_OPS_PAT }}@github.com/CivicAIPortal/dev-ops.git devops
           chmod +x ./devops/scripts/harborconfig.sh
           . ./devops/scripts/harborconfig.sh deployment/helm/harbor.config
 
