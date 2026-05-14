@@ -10,14 +10,38 @@ permissions:
   actions: read
   
 jobs:
+  validate-harbor-secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate Harbor secrets
+        env:
+          HARBOR_HOST: ${{ secrets.HARBOR_HOST }}
+          HARBOR_CREDENTIALS: ${{ secrets.HARBOR_CREDENTIALS }}
+        run: |
+          missing=0
+          if [ -z "$HARBOR_HOST" ]; then
+            echo "Missing required secret: HARBOR_HOST"
+            missing=1
+          fi
+          if [ -z "$HARBOR_CREDENTIALS" ]; then
+            echo "Missing required secret: HARBOR_CREDENTIALS"
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            echo "Configure required Harbor secrets for this repository (or org secret access) and re-run."
+            exit 1
+          fi
+
   dockerbuild:
+    needs: validate-harbor-secrets
     uses: CivicAIPortal/dev-ops/.github/workflows/docker.yml@main
     secrets: inherit
     with: 
       dockerfile: "deployment/docker/Dockerfile"
-      harbor_config: "deployment/harbor.config"
+      harbor_config: "deployment/docker/harbor.config"
   
   helm-setup:
+    needs: validate-harbor-secrets
     uses: CivicAIPortal/dev-ops/.github/workflows/build-context.yml@main
     secrets: inherit
   
